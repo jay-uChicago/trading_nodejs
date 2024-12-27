@@ -1,0 +1,265 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <title>POEMS API Demo</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:700,400,300">
+    <link rel="stylesheet" href="stylesheets/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="stylesheets/animate.css/animate.min.css">
+    <link rel="stylesheet" href="stylesheets/mobirise/css/style.css">
+    <link rel="stylesheet" href="stylesheets/mobirise/css/mbr-additional.css" type="text/css">
+    <script src='https://www.google.com/recaptcha/api.js'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fingerprintjs2/1.8.1/fingerprint2.min.js"></script>
+    <script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-2.2.4.min.js"></script>
+    <script src='https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js'></script>
+    <script src="/javascripts/JSON-to-Table.min.1.0.0.js"></script>
+    <script src="/javascripts/smooth-scroll/smooth-scroll.js"></script>
+    <script type="text/javascript" src="https://www.google.com/recaptcha/api/js/recaptcha_ajax.js"></script>
+
+
+    <script>
+
+        // Variables for API - Authorise API
+        var authApiUrl; // URL for authorise API
+        var clientId; 	// your client_id provided to you during registration
+        var redirectUrl; //callback url for your application
+        // randomly generated state
+        var state = "123";
+        var fingerPrint;
+        window.onload = function (e) {
+
+            // invoke AJAX call to get the clientId & redirectURL from serverside
+            $.ajax({
+                url: "/getEnv",
+                data: {
+                },
+                type: "GET", // get from serverside
+                success: function (data) {
+                    // successful response from serverside
+                    if (data.status == "OK") { // successful
+                        // fill up the environment variable
+                        clientId = data.clientId;
+                        redirectUrl = data.redirectUrl;
+                        authApiUrl = data.authApiUrl;
+
+                    } else {
+                        // error occured
+                        alert("ERROR:" + JSON.stringify(data.msg));
+                    }
+
+                }
+            });
+
+            //GET the browser fingerprint
+            //the unique instance id / session id 
+            if (window.requestIdleCallback) {
+                requestIdleCallback(function () {
+                    new Fingerprint2().get(function (v, components) {
+                        console.log(v) // a hash, representing your device fingerprint                
+                        fingerPrint = v;
+                    })
+                })
+            } else {
+                setTimeout(function () {
+                    new Fingerprint2().get(function (v, components) {
+                        fingerPrint = v;
+                    })
+                }, 500);
+            }
+
+
+
+            $('#orderResult').hide();
+            $('#authenticateResult').hide();
+            $('#vieworders').hide();
+            
+
+            if ($("#authenticated").val() == "true") {
+                $('#authenticateResult').show();
+                $('#vieworders').show();
+                $('html,body').animate({ scrollTop: 400 }, 'slow');
+            }
+        }
+
+        //function to redirect to POEMS API login page
+        function callLoginApi() {
+
+            //Step 1 : Trigger POEMS API Login (call Authorize API). Uncomment the below comment.            
+            
+            var authoriseUrl = authApiUrl
+                + "?response_type=code"
+                + "&client_id=" + clientId
+                + "&deviceId=" + fingerPrint
+                + "&state=" + state
+                + "&redirect_uri=" + redirectUrl;
+
+            window.location = authoriseUrl;
+        
+        }
+
+        //function to request today order api
+        function callTodayOrdersApi() {
+            $('html,body').animate({ scrollTop: 400 }, 'slow');
+            // invoke AJAX call to get the clientId & redirectURL from serverside
+            $.ajax({
+                url: "/getTodayOrders",
+                type: "GET", // get from serverside
+                success: function (data) {
+
+                    // successful response from serverside
+                    if (data.status == "OK") { // successful
+                        $('#authenticateResult').hide();
+                        $('#orderResult').show();
+
+                        // fill up the application form                      
+                        var list = data.msg.orders;
+
+                        var data = [];
+                        for (var i = 0; i < list.length; i++) {
+                            if (i < 10 && list[i].product == "ST") {
+                                data.push({
+                                    "orderNo": list[i].orderNo,
+                                    "name": list[i].name,
+                                    "action": list[i].action,
+                                    "status": list[i].status,
+                                    "Price": list[i].submittedPrice,
+                                    "Qty": list[i].submittedQty,
+                                    "Time": list[i].latestUpdatedTime
+                                });
+                            }
+                        }
+                        data.sort(function (obj1, obj2) {
+                            var dateA = new Date(obj1.UpdatedTime), dateB = new Date(obj2.UpdatedTime);
+                            return dateB - dateA;
+                        });
+
+
+                        $('.table').createTable(data, {
+                            // General Style for Table
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: '#DDDDDD',
+                            fontFamily: 'Verdana, Helvetica, Arial, FreeSans, sans-serif',
+
+                            // Table Header Style
+                            thBg: '#F3F3F3',
+                            thColor: '#0E0E0E',
+                            thPaddingLeft: '5px',
+                            thHeight: '30px',
+                            thFontFamily: '"Open Sans Condensed", sans-serif',
+                            thFontSize: '14px',
+                            thTextTransform: 'capitalize',
+
+                            // Table Body/Row Style
+                            trBg: '#fff',
+                            trColor: '#0E0E0E',
+                            trHeight: '25px',
+                            trFontFamily: '"Open Sans", sans-serif',
+                            trFontSize: '13px',
+
+                            // Table Body's Column Style
+                            tdPaddingLeft: '10px',
+                            tdPaddingRight: '10px'
+                        });
+
+
+                    }
+                    else if (data.status == "UNAUTHORIZED") {
+                        //Unauthorized redirect to authorize url                                                  
+                        alert(data.status + ". Please clear your cache and log in to POEMS API.");
+                    }
+                    else {
+                        // error occured
+                        alert("ERROR:" + JSON.stringify(data.msg));
+                    }
+                }
+            });
+
+        }
+
+
+
+    </script>
+</head>
+
+<body>
+    <input type="hidden" id="authenticated" name="authenticated" value="false">
+    <section class="mbr-box mbr-section mbr-section--relative mbr-section--fixed-size mbr-section--full-height mbr-section--bg-adapted mbr-parallax-background"
+        id="header1-0" data-rv-view="26" style="background-image: url(images/banner1-1920x720.jpg);">
+        <div class="mbr-box__magnet mbr-box__magnet--sm-padding mbr-box__magnet--center-left">
+            <div class="mbr-overlay" style="opacity: 0.3; background-color: rgb(34, 34, 34);"></div>
+            <div class="mbr-box__container mbr-section__container container">
+                <div class="mbr-box mbr-box--stretched">
+                    <div class="mbr-box__magnet mbr-box__magnet--center-left">
+                        <div class="row">
+                            <div class=" col-sm-6">
+                                <div class="mbr-hero animated fadeInUp">
+                                    <h1 class="mbr-hero__text">POEMS API DEMO</h1>
+                                    <p class="mbr-hero__subtext">Reimagining the way your application can help clients achieve financial independence.
+                                    </p>
+                                </div>
+                                <div class="mbr-buttons btn-inverse mbr-buttons--left">
+                                    <button class="btn btn-md btn-orange" style="min-width:40%;margin-right:15px" onclick="callLoginApi()">Log In</button>
+                                    <button class="btn btn-md btn-orange" style="min-width:40%;display:none" onclick="callTodayOrdersApi()" id ="vieworders">View Orders</button>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mbr-arrow mbr-arrow--floating text-center">
+                <div class="mbr-section__container container">
+                    <a class="mbr-arrow__link" href="#ResultView">
+                        <i class="glyphicon glyphicon-menu-down"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section class="mbr-section mbr-section--relative mbr-section--fixed-size" id="form1-4" data-rv-view="32" style="background-color: #e8e9ea;">
+        <div class="mbr-section__container mbr-section__container--std-padding container" id="ResultView" style="padding-top: 93px; padding-bottom: 93px;">
+
+            <div id="authenticateResult">
+                <div class="row">
+                    <div class="col-sm-12">
+                        <div class="row">
+                            <div class="col-sm-8 col-sm-offset-2" data-form-type="formoid">
+
+                                <form data-form-title="Sign up for New Account" id="form-signup">
+                                    <h2 class="text-center">you have been authorized.</h2>
+
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div id="orderResult">
+                <div class="row">
+                    <div class="col-sm-12">
+                        <div class="row">
+                            <div class="col-sm-8 col-sm-offset-2" data-form-type="formoid">
+
+                                <form data-form-title="Sign up for New Account" id="form-signup">
+                                    <h2 class="text-center">Today Stock Orders</h2>
+                                    <div class="form-group field-wrap">
+                                        <label for="firstname">Top 10 stock orders by updated time*</label>
+                                    </div>
+                                    <div class="form-group field-wrap table">
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
